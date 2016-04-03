@@ -19,13 +19,13 @@ def getCount():
 
 
 BLUE = [255,0,0]        # part 1
-RED = [0,0,255]         # part 2
-GREEN = [0,255,0]       # part 3
+GREEN = [0,255,0]       # part 2
+RED = [0,0,255]         # part 3
 YELLOW = [0,255,255]    # part 4
 
 DRAW_P1 = {'color' : BLUE, 'val' : 1}
-DRAW_P2 = {'color' : RED, 'val' : 1}
-DRAW_P3 = {'color' : GREEN, 'val' : 1}
+DRAW_P2 = {'color' : GREEN, 'val' : 1}
+DRAW_P3 = {'color' : RED, 'val' : 1}
 DRAW_P4 = {'color' : YELLOW, 'val' : 1}
 
 drawing = False         # flag for drawing curves
@@ -145,38 +145,63 @@ def calcBorderForMaskZ(grabMask):
     #plt.imshow(result),plt.colorbar(),plt.show()
     return result
 
+#def calculateBorderMask(grabMasks, count): # Calculkate borders from previous masks
+#    borderMasks = []
+#    for i in range(0, count):
+#        borderMask = calcBorderForMaskZ(grabMasks[i])
+#        borderMasks.append(borderMask)
+#    return borderMasks
+
+#def drawBorder(image, value, mask):
+#    (height, width) = mask.shape
+#    for row in range(0, height):
+#        for col in range(0, width):
+#            if mask[row][col] == 1:
+#                image[row][col] = value['color']
+#    return image
+
+def showImage(image):
+    plt.imshow(image),plt.colorbar(),plt.show()
 
 
-
-def calculateBorderMask(grabMasks, count): # Calculkate borders from previous masks
-    borderMasks = []
-    for i in range(0, count):
-        borderMask = calcBorderForMaskZ(grabMasks[i])
-        borderMasks.append(borderMask)
-    return borderMasks
-
-def drawBorder(image, value, mask):
-    (height, width) = mask.shape
+def drawPartI(im, color, grabMask):
+    (height, width) = grabMask.shape
     for row in range(0, height):
         for col in range(0, width):
             if mask[row][col] == 1:
-                image[row][col] = value['color']
-    return image
+                if color < 3:
+                    im[row][col][color] = 255
+                else:
+                    im[row][col][1] = 255
+                    im[row][col][2] = 255
 
-def showResult(image, borderMask, count):  # draw borders on the image
+
+    #if color == 1
+
+    #elif color == 2
+
+    #elif color == 3
+
+    #else
+
+    return im
+
+def showResult(image, grabMasks, count):  # draw borders on the image
     global value
     im = copy.deepcopy(image);
     for i in range(0, count):
-        if i == 0:
-            value = DRAW_P1
-        elif i == 1:
-            value = DRAW_P2
-        elif i == 2:
-            value = DRAW_P3
-        elif i == 3:
-            value = DRAW_P4
-        im = drawBorder(im, value, borderMask[i])
-    plt.imshow(im),plt.colorbar(),plt.show()
+    #    if i == 0:
+    #        value = DRAW_P1
+    #    elif i == 1:
+    #        value = DRAW_P2
+    #    elif i == 2:
+    #        value = DRAW_P3
+    #    elif i == 3:
+    #        value = DRAW_P4
+        #im = drawBorder(im, value, borderMask[i])
+        color = i
+        im = drawPartI(im, color, grabMasks[i])
+    showImage(im)
     cv2.namedWindow('output')
     cv2.imshow('output',im)
 
@@ -211,8 +236,8 @@ while(1):
     #    plt.imshow(grabMasks[i]),plt.colorbar(),plt.show()
 
 
-    borderMask = calculateBorderMask(grabMasks, count) # Calculkate borders from previous masks
-    showResult(imgInputOriginal, borderMask, count) # draw borders on the image
+    #borderMask = calculateBorderMask(grabMasks, count) # Calculkate borders from previous masks
+    showResult(imgInputOriginal, grabMasks, count) # draw borders on the image
 
 
     #print("Press n to continue, Esc to exit\n") 
