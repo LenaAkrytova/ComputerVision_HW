@@ -6,6 +6,7 @@ from scipy import signal
 import tkinter as tk
 from tkinter import filedialog
 import sys
+import os
 from PIL import Image
 
 #
@@ -284,58 +285,70 @@ def setStop():
 #        PROGRAM START
 #
 ##################################################################
+def main():
 
-filename = selectfile()
-imgInput = cv2.imread(filename)
-imgInputOriginal = copy.deepcopy(imgInput)
-imBorders = copy.deepcopy(imgInput)
-count = getCount()
-
-#
-# Init the masks array to Possible Foreground
-#
-for i in range(0, count):
-    mask = 3 + np.zeros(imgInput.shape[:2], dtype = np.uint8)
-    masks.append(mask)
-
-#
-# Start the iterative process
-#
-while(1):
+    filename = selectfile()
+    imgInput = cv2.imread(filename)
+    imgInputOriginal = copy.deepcopy(imgInput)
+    imBorders = copy.deepcopy(imgInput)
+    count = getCount()
+    #
+    # Invalid input. Exiting.
+    #
+    if count < 2 or count > 4:
+        print('Invalid input. Exiting...')
+        return
 
     #
-    # Read user mouse input (including the previous input)
+    # Init the masks array to Possible Foreground
     #
-    preparedMasks = getUserInput(imgInput, imBorders, count, masks)
-    if shouldStop() == 1:
-        break
-
-    #
-    # Grab areas
-    #
-    grabMasks = grabImages(imgInputOriginal, preparedMasks, count)
     for i in range(0, count):
-        showImageDebug(grabMasks[i], 'Mask number ' + str(i))
+        mask = 3 + np.zeros(imgInput.shape[:2], dtype = np.uint8)
+        masks.append(mask)
 
     #
-    # Show glued mask
+    # Start the iterative process
     #
-    showMasksTogether(grabMasks)
-
-    #
-    # Calculate area borders
-    #
-    borderMask = calculateBorderMasks(grabMasks, count) 
-
-    #
-    # Draw borders and display the result
-    #
-    imageToDisplay = copy.deepcopy(imgInputOriginal)
-    imBorders = calculateSegmentedImage(imageToDisplay, borderMask, count)
-    showImageRGB(imBorders, 'Segmentation result')
+    while(1):
     
-    print("Press n to continue, Esc to exit\n") 
-    k = 0xFF & cv2.waitKey(1)
-    if k == 27:    # esc to exit
-        break
-cv2.destroyAllWindows()
+        #
+        # Read user mouse input (including the previous input)
+        #
+        preparedMasks = getUserInput(imgInput, imBorders, count, masks)
+        if shouldStop() == 1:
+            break
+
+        #
+        # Grab areas
+        #
+        grabMasks = grabImages(imgInputOriginal, preparedMasks, count)
+        for i in range(0, count):
+            showImageDebug(grabMasks[i], 'Mask number ' + str(i))
+
+        #
+        # Show glued mask
+        #
+        showMasksTogether(grabMasks)
+
+        #
+        # Calculate area borders
+        #
+        borderMask = calculateBorderMasks(grabMasks, count) 
+
+        #
+        # Draw borders and display the result
+        #
+        imageToDisplay = copy.deepcopy(imgInputOriginal)
+        imBorders = calculateSegmentedImage(imageToDisplay, borderMask, count)
+        showImageRGB(imBorders, 'Segmentation result')
+    
+        print("Press n to continue, Esc to exit\n") 
+        k = 0xFF & cv2.waitKey(1)
+        if k == 27:    # esc to exit
+            break
+    cv2.destroyAllWindows()
+
+#
+# Run main
+#
+main()
