@@ -135,9 +135,14 @@ def calcBorderForMask(grabMask):
     return  grabMask
 
 def calcBorderForMaskZ(grabMask):  
-    conv = scharr = np.array([[-1, -1, -1],
-                              [-1, 8, -1],
-                              [-1, -1, -1]])
+    #conv = scharr = np.array([[-1, -1, -1],
+    #                          [-1, 8, -1],
+    #                          [-1, -1, -1]])
+    conv = scharr = np.array([[-1, -1, -1, -1, -1],
+                              [-1, -1, -1, -1, -1],
+                              [-1, -1, 16, -1, -1],
+                              [-1, -1, -1, -1, -1],
+                              [-1, -1, -1, -1, -1]])
     result = signal.convolve2d(grabMask, conv, 'same')
     result = np.where(result < 0, 0, result)
     result = np.where(result > 0, 1, result)
@@ -145,20 +150,20 @@ def calcBorderForMaskZ(grabMask):
     #plt.imshow(result),plt.colorbar(),plt.show()
     return result
 
-#def calculateBorderMask(grabMasks, count): # Calculkate borders from previous masks
-#    borderMasks = []
-#    for i in range(0, count):
-#        borderMask = calcBorderForMaskZ(grabMasks[i])
-#        borderMasks.append(borderMask)
-#    return borderMasks
+def calculateBorderMask(grabMasks, count): # Calculkate borders from previous masks
+    borderMasks = []
+    for i in range(0, count):
+        borderMask = calcBorderForMaskZ(grabMasks[i])
+        borderMasks.append(borderMask)
+    return borderMasks
 
-#def drawBorder(image, value, mask):
-#    (height, width) = mask.shape
-#    for row in range(0, height):
-#        for col in range(0, width):
-#            if mask[row][col] == 1:
-#                image[row][col] = value['color']
-#    return image
+def drawBorder(image, value, mask):
+    (height, width) = mask.shape
+    for row in range(0, height):
+        for col in range(0, width):
+            if mask[row][col] == 1:
+                image[row][col] = value['color']
+    return image
 
 def showImage(image):
     plt.imshow(image),plt.colorbar(),plt.show()
@@ -174,38 +179,35 @@ def drawPartI(im, color, grabMask):
                 else:
                     im[row][col][1] = 255
                     im[row][col][2] = 255
-
-
-    #if color == 1
-
-    #elif color == 2
-
-    #elif color == 3
-
-    #else
-
     return im
 
-def showResult(image, grabMasks, count):  # draw borders on the image
-    global value
+def showResult(image, grabMasks, count):  
+    #global value
     im = copy.deepcopy(image);
     for i in range(0, count):
-    #    if i == 0:
-    #        value = DRAW_P1
-    #    elif i == 1:
-    #        value = DRAW_P2
-    #    elif i == 2:
-    #        value = DRAW_P3
-    #    elif i == 3:
-    #        value = DRAW_P4
-        #im = drawBorder(im, value, borderMask[i])
         color = i
         im = drawPartI(im, color, grabMasks[i])
     showImage(im)
     cv2.namedWindow('output')
     cv2.imshow('output',im)
+    return im
 
-
+def showBorders(image, borderMask, count): # draw borders on the image
+    global value
+    for i in range(0, count):
+        if i == 0:
+            value = DRAW_P1
+        elif i == 1:
+            value = DRAW_P2
+        elif i == 2:
+            value = DRAW_P3
+        elif i == 3:
+            value = DRAW_P4
+        im = drawBorder(image, value, borderMask[i])
+        color = i
+    #showImage(im)
+    cv2.imshow('output',im)
+        
 def shouldStop():
     global stopFlag
     return stopFlag
@@ -236,12 +238,13 @@ while(1):
     #    plt.imshow(grabMasks[i]),plt.colorbar(),plt.show()
 
 
-    #borderMask = calculateBorderMask(grabMasks, count) # Calculkate borders from previous masks
-    showResult(imgInputOriginal, grabMasks, count) # draw borders on the image
+    borderMask = calculateBorderMask(grabMasks, count) # Calculkate borders from previous masks
 
-
-    #print("Press n to continue, Esc to exit\n") 
-    #k = 0xFF & cv2.waitKey(1)
-    #if k == 27:    # esc to exit
-     #   break
-#cv2.destroyAllWindows()
+    #imRes = showResult(imgInputOriginal, grabMasks, count) # draw borders on the image
+    imBorders = showBorders(imgInputOriginal, borderMask, count)
+    
+    print("Press n to continue, Esc to exit\n") 
+    k = 0xFF & cv2.waitKey(1)
+    if k == 27:    # esc to exit
+        break
+cv2.destroyAllWindows()
