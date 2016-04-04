@@ -8,30 +8,46 @@ from tkinter import filedialog
 import sys
 from PIL import Image
 
+#
+# Global variables
+#
+BLUE = [255,0,0]        # part 1
+GREEN = [0,255,0]       # part 2
+RED = [0,0,255]         # part 3
+YELLOW = [0,255,255]    # part 4
+DRAW_P1 = {'color' : BLUE, 'val' : 1, 'colorname' : 'BLUE'}
+DRAW_P2 = {'color' : GREEN, 'val' : 1, 'colorname' : 'GREEN'}
+DRAW_P3 = {'color' : RED, 'val' : 1, 'colorname' : 'RED'}
+DRAW_P4 = {'color' : YELLOW, 'val' : 1, 'colorname' : 'YELLOW'}
+
+drawing = False         # flag for drawing curves
+thickness = 3           # brush thickness
+value = DRAW_P1
+masks = []
+stopFlag = 0
+DEBUG = 0
+#
+# Functions below
+#
+
+#
+# A simple function to select an input file
+#
 def selectfile():
     root = tk.Tk()
     root.withdraw()
     file_path = filedialog.askopenfilename()
     return file_path
 
+#
+# A simple functin to get from the user the number of partitions
+#
 def getCount():
     return int(input('Enter parts number (2 - 4): '))
 
-
-BLUE = [255,0,0]        # part 1
-GREEN = [0,255,0]       # part 2
-RED = [0,0,255]         # part 3
-YELLOW = [0,255,255]    # part 4
-
-DRAW_P1 = {'color' : BLUE, 'val' : 1}
-DRAW_P2 = {'color' : GREEN, 'val' : 1}
-DRAW_P3 = {'color' : RED, 'val' : 1}
-DRAW_P4 = {'color' : YELLOW, 'val' : 1}
-
-drawing = False         # flag for drawing curves
-thickness = 3           # brush thickness
-value = DRAW_P1
-
+#
+# Mouse click listener.  Used to listen to clicks in the input window
+#
 def onmouse(event,x,y,flags,param):
     global imgInput,img2,drawing,value,mask
         
@@ -52,17 +68,37 @@ def onmouse(event,x,y,flags,param):
             cv2.circle(imgInput,(x,y), thickness, value['color'],-1)
             cv2.circle(mask,(x,y), thickness, value['val'],-1)
 
-def getUserInput(image, count, masks):  # Get parts cound and user-marked masks
+#
+# A function to process masks and ensure that pixels selected in one mask
+# surely marked as BACKGROUOND in all other masks
+#
+def prepareMasks(masks):
+    preparedMasks = []
+    for i in range(0, count):
+        preparedMask = copy.deepcopy(masks[i])
+        for j in range(0, count):
+            if i != j:
+                preparedMask = np.where((masks[j] == 1),0,preparedMask).astype('uint8')
+        preparedMasks.append(preparedMask)
+    return preparedMasks
+
+#
+# A function, which displays the original image and previously marked user masks
+# enables a user to refine masks by adding more points in the same order.
+#
+def getUserInput(image, previousResult, count, masks):  # Get parts count and user-marked masks
     global value, mask
-    cv2.namedWindow('input')
-    #cv2.moveWindow('input', 0, 0)
+    showImageCV2(previousResult, 'Segmented so far')
+
+    inputWindowTitle = 'Use mouse to mark segments'
+    cv2.namedWindow(inputWindowTitle)
     bgdmodel = np.zeros((1,65),np.float64)
     fgdmodel = np.zeros((1,65),np.float64)
     
-    cv2.setMouseCallback('input', onmouse)
+    cv2.setMouseCallback(inputWindowTitle, onmouse)
     for i in range(0, count):
         # first - get the ALREADY filled mask, from the previous user attempt
-        mask = copy.deepcopy(masks[i]);
+        mask = copy.deepcopy(masks[i])
         if i == 0:
             value = DRAW_P1
         elif i == 1:
@@ -72,91 +108,99 @@ def getUserInput(image, count, masks):  # Get parts cound and user-marked masks
         elif i == 3:
             value = DRAW_P4
 
-        print(" mark part %d regions with left mouse button and after press 'n'\n" % (i + 1))
+        print("Mark part %d %s regions with left mouse button and after press 'n'\n" % ((i + 1), value['colorname']))
         while(1):
             k = 0xFF & cv2.waitKey(1)
             
-            cv2.imshow('input',image)
-            # key bindings
+            cv2.imshow(inputWindowTitle,image)
             if k == 27:    # esc to exit
                 cv2.destroyAllWindows()
                 setStop()
                 return
             elif k == ord('n'): # segment the image
                 masks[i] = mask
-                #mask = 2+np.zeros(image.shape[:2],dtype = np.uint8)
-                #plt.imshow(masks[i]),plt.colorbar(),plt.show()
-                break   
-    cv2.destroyAllWindows()          
-  
-                  
-def grabImagesZ(image, masks, count):  # Get 4 masks, the image should be divided into 4 parts
+                showImageDebug(masks[i], 'user masks after selection')
+                break  
+
+    preparedMasks = prepareMasks(masks)
+    cv2.destroyAllWindows()  
+    return preparedMasks        
+   
+#
+#  A function which actually calls the grabCut()
+#  returns masks for each area
+#  The last mask contains all the unclaimed area!
+#
+def grabImages(image, masks, count):  # Get 4 masks, the image should be divided into 4 parts
     grabMasks = []
     for i in range(0, count): 
         bgdmodel = np.zeros((1,65),np.float64)
         fgdmodel = np.zeros((1,65),np.float64)
-        (grabMask, bgdModel, fgdModel) = cv2.grabCut(image,masks[i],None,bgdmodel,fgdmodel,1,cv2.GC_INIT_WITH_MASK)
+        (grabMask, bgdModel, fgdModel) = cv2.grabCut(image,masks[i], None, bgdmodel, fgdmodel, 1, cv2.GC_INIT_WITH_MASK)
         grabMasks.append(grabMask)
-        #plt.imshow(grabMask),plt.colorbar(),plt.show()
-        #plt.imshow(masks[i]),plt.colorbar(),plt.show()
+        showImageDebug(grabMask, 'grabmask ' + str(i))
 
-    #set 1 for foreground and possible foreground
-    #set 0 fro background and possible background
-    for i in range (0, count):
-        grabMasks[i] = np.where((grabMasks[i]==2)|(grabMasks[i]==0),0,1).astype('uint8')
-        #plt.imshow(grabMasks[i]),plt.colorbar(),plt.show()
+    #
+    # Normalization - remove possibly FG and BG
+    # set 1 for foreground and possible foreground and 0 for background and
+    # possible background
+    #
+    for i in range(0, count):
+        grabMasks[i] = np.where((grabMasks[i] == 2) | (grabMasks[i] == 0), 0, 1).astype('uint8')
+        showImageDebug(grabMasks[i], 'grabmask normalized ' + str(i))
 
-    for i in range (1, count):
-        for j in range (0, i):
-            grabMasks[i] = np.where((grabMasks[j]==1),0, grabMasks[i]).astype('uint8')
-        #plt.imshow(grabMasks[i]),plt.colorbar(),plt.show()
+    #
+    # Remove conflicts in the resulting masks.  priority order is FIFO
+    #
+    for i in range(1, count):
+        for j in range(0, i):
+            grabMasks[i] = np.where((grabMasks[j] == 1), 0, grabMasks[i]).astype('uint8')
+        showImageDebug(grabMasks[i], 'grabmask with no conflicts ' + str(i))
 
+    #
+    # Prepare the last mask to include all area not included in the previous
+    # masks
+    #
     totalMask = np.where(grabMasks[0] == 1, 0, 0)
-    for i in range(0, count -1):
+    for i in range(0, count - 1):
         totalMask = np.where(grabMasks[i] == 1, 1, totalMask)
-
     grabMasks[count - 1] = np.where(totalMask == 1, 0, 1)
+
     return grabMasks
 
-def calcBorderForMask(grabMask):  
-    (height, width) = grabMask.shape
-
-    for j in range(1, width-2):
-        for i in range(1, height-2):
-            if grabMask[i][j] != 0:
-                if grabMask[i-1][j] == 0 or grabMask[i][j-1] == 0 or grabMask[i + 1][j] == 0 or grabMask[i][j+1] == 0:
-                    grabMask[i][j] = 255     
-    for i in range(0, height-1):
-        for j in range(0, width-1):
-            if grabMask[i][j] != 255:
-                grabMask[i][j] = 0
-            else:
-                grabMask[i][j] = 1  
-    return  grabMask
-
+#
+#  This function calculates mask for area border. Mask thickness is 2 pixels
+#
 def calcBorderForMaskZ(grabMask):  
-    #conv = scharr = np.array([[-1, -1, -1],
-    #                          [-1, 8, -1],
-    #                          [-1, -1, -1]])
-    conv = scharr = np.array([[-1, -1, -1, -1, -1],
-                              [-1, -1, -1, -1, -1],
-                              [-1, -1, 16, -1, -1],
-                              [-1, -1, -1, -1, -1],
-                              [-1, -1, -1, -1, -1]])
+    #conv = np.array([[-1, -1, -1],
+    #                 [-1, 8, -1],
+    #                 [-1, -1, -1]])
+    conv = np.array([[-1, -1, -1, -1, -1],
+                     [-1, -1, -1, -1, -1],
+                     [-1, -1, 16, -1, -1],
+                     [-1, -1, -1, -1, -1],
+                     [-1, -1, -1, -1, -1]])
+
     result = signal.convolve2d(grabMask, conv, 'same')
     result = np.where(result < 0, 0, result)
     result = np.where(result > 0, 1, result)
-
-    #plt.imshow(result),plt.colorbar(),plt.show()
+    showImageDebug(result, 'border mask')
     return result
 
-def calculateBorderMask(grabMasks, count): # Calculkate borders from previous masks
+#
+# Calculate border masks for each area and return them
+#
+def calculateBorderMasks(grabMasks, count):
     borderMasks = []
     for i in range(0, count):
         borderMask = calcBorderForMaskZ(grabMasks[i])
         borderMasks.append(borderMask)
     return borderMasks
 
+#
+# Draw a border on the given image according to the given mask
+# value is the border color
+#
 def drawBorder(image, value, mask):
     (height, width) = mask.shape
     for row in range(0, height):
@@ -165,34 +209,46 @@ def drawBorder(image, value, mask):
                 image[row][col] = value['color']
     return image
 
-def showImage(image):
-    plt.imshow(image),plt.colorbar(),plt.show()
+#
+# Will display the image ALLOWING TO SAVE IT
+#
+def showImage(image, title):
+    fig = plt.gcf()
+    fig.canvas.set_window_title(title + '. Use Save As to save the image')
+    plt.imshow(image),plt.colorbar(),plt.show() 
+
+def showImageRGB(image, title):
+    fig = plt.gcf()
+    fig.canvas.set_window_title(title + '. Use Save As to save the image')
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB)),plt.colorbar(),plt.show() 
+
+#
+# Will display the image ALLOWING TO SAVE IT only if DEBUG != 0
+#
+def showImageDebug(image, title):
+    if DEBUG != 0:
+        fig = plt.gcf()
+        fig.canvas.set_window_title(title + '. Use Save As to save the image')
+        plt.imshow(image),plt.colorbar(),plt.show() 
+
+def showImageCV2(image, title):
+    cv2.namedWindow(title);
+    cv2.imshow(title, image);
+
+#
+#
+#
+def showMasksTogether(masksToGlue):
+    result = np.where(masksToGlue[0] == 0, 0, 0)
+    for i in range (0, count):
+        result = np.where(masksToGlue[i] == 1, i, result)
+    showImage(result, 'All masks together')
 
 
-def drawPartI(im, color, grabMask):
-    (height, width) = grabMask.shape
-    for row in range(0, height):
-        for col in range(0, width):
-            if mask[row][col] == 1:
-                if color < 3:
-                    im[row][col][color] = 255
-                else:
-                    im[row][col][1] = 255
-                    im[row][col][2] = 255
-    return im
-
-def showResult(image, grabMasks, count):  
-    #global value
-    im = copy.deepcopy(image);
-    for i in range(0, count):
-        color = i
-        im = drawPartI(im, color, grabMasks[i])
-    showImage(im)
-    cv2.namedWindow('output')
-    cv2.imshow('output',im)
-    return im
-
-def showBorders(image, borderMask, count): # draw borders on the image
+#
+# Display the image with bordered areas. It is possible to Save As the image
+#
+def calculateSegmentedImage(image, borderMask, count):
     global value
     for i in range(0, count):
         if i == 0:
@@ -205,44 +261,78 @@ def showBorders(image, borderMask, count): # draw borders on the image
             value = DRAW_P4
         im = drawBorder(image, value, borderMask[i])
         color = i
-    #showImage(im)
-    cv2.imshow('output',im)
-        
+    return im
+
+
+#
+# Queries the stop flag, which indicates whether we have to run another iteration
+#
 def shouldStop():
     global stopFlag
     return stopFlag
 
+#
+# Sets the stop flag
+#
 def setStop():
-    global stopFlag;
+    global stopFlag
     stopFlag = 1
+
+
+##################################################################
+#
+#        PROGRAM START
+#
+##################################################################
 
 filename = selectfile()
 imgInput = cv2.imread(filename)
 imgInputOriginal = copy.deepcopy(imgInput)
+imBorders = copy.deepcopy(imgInput)
 count = getCount()
-masks = []
-stopFlag = 0;
+
+#
+# Init the masks array to Possible Foreground
+#
 for i in range(0, count):
-    mask = 2+np.zeros(imgInput.shape[:2],dtype = np.uint8)
+    mask = 3 + np.zeros(imgInput.shape[:2], dtype = np.uint8)
     masks.append(mask)
+
+#
+# Start the iterative process
+#
 while(1):
-    getUserInput(imgInput, count, masks)  # Get parts cound and user-marked masks
+
+    #
+    # Read user mouse input (including the previous input)
+    #
+    preparedMasks = getUserInput(imgInput, imBorders, count, masks)
     if shouldStop() == 1:
         break
-    #plt.imshow(imgInputOriginal),plt.colorbar(),plt.show()
-    masksCopy = masks 
-    #for i in range(0, count):
-    #    plt.imshow(masks[i]),plt.colorbar(),plt.show()
-    grabMasks = grabImagesZ(imgInputOriginal, masks, count) # Get 4 masks, the image should be divided into 4 parts
-   # for i in range(0, count):
-    #    plt.imshow(grabMasks[i]),plt.colorbar(),plt.show()
 
+    #
+    # Grab areas
+    #
+    grabMasks = grabImages(imgInputOriginal, preparedMasks, count)
+    for i in range(0, count):
+        showImageDebug(grabMasks[i], 'Mask number ' + str(i))
 
-    borderMask = calculateBorderMask(grabMasks, count) # Calculkate borders from previous masks
+    #
+    # Show glued mask
+    #
+    showMasksTogether(grabMasks)
 
-    #imRes = showResult(imgInputOriginal, grabMasks, count) # draw borders on the image
-    imageToDisplay = copy.deepcopy(imgInputOriginal);
-    imBorders = showBorders(imageToDisplay, borderMask, count)
+    #
+    # Calculate area borders
+    #
+    borderMask = calculateBorderMasks(grabMasks, count) 
+
+    #
+    # Draw borders and display the result
+    #
+    imageToDisplay = copy.deepcopy(imgInputOriginal)
+    imBorders = calculateSegmentedImage(imageToDisplay, borderMask, count)
+    showImageRGB(imBorders, 'Segmentation result')
     
     print("Press n to continue, Esc to exit\n") 
     k = 0xFF & cv2.waitKey(1)
