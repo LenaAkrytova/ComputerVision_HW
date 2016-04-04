@@ -241,7 +241,8 @@ while(1):
     borderMask = calculateBorderMask(grabMasks, count) # Calculkate borders from previous masks
 
     #imRes = showResult(imgInputOriginal, grabMasks, count) # draw borders on the image
-    imBorders = showBorders(imgInputOriginal, borderMask, count)
+    imageToDisplay = copy.deepcopy(imgInputOriginal);
+    imBorders = showBorders(imageToDisplay, borderMask, count)
     
     print("Press n to continue, Esc to exit\n") 
     k = 0xFF & cv2.waitKey(1)
